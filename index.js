@@ -58,14 +58,18 @@ class ServerlessPlugin {
         const args = [
           '--out-dir=tmpBabelDirectory',
           'tmpBabelDirectory',
-          '--ignore=node_modules',
-          `--presets=${this.serverless.service.custom.babelPresets.join(',')}`,
-          `--plugins=${this.serverless.service.custom.babelPlugins.join(',')}`,
+          '--ignore=node_modules'
         ];
+        if(this.serverless.service.custom.babelPresets) {
+          args.push(`--presets=${this.serverless.service.custom.babelPresets.join(',')}`)
+        }
+        if(this.serverless.service.custom.babelPlugins) {
+          args.push(`--plugins=${this.serverless.service.custom.babelPlugins.join(',')}`)
+        }
         const options = {
           cwd: path.join(servicePath, '.serverless'),
         };
-        const execPath = path.join(__dirname, '..', '.bin/babel');
+        let execPath = path.join(__dirname, '..', '.bin/babel');
         console.log('Babel Executable: ' + execPath);
         if (isWin) execPath += '.cmd';
         const result = spawnSync(execPath, args, options);
