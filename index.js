@@ -24,8 +24,13 @@ class ServerlessPlugin {
     };
   }
 
+  log(msg) {
+    this.serverless.cli.log(`[serverless-babel-plugin]: ${msg}`);
+  }
+
   transform() {
     return new BbPromise((resolve, reject) => {
+      this.log('Running Babel...')
       const servicePath = this.serverless.config.servicePath;
 
       let bundleName = this.serverless.service.service;
@@ -55,7 +60,6 @@ class ServerlessPlugin {
           cwd: path.join(servicePath, '.serverless'),
         };
         let execPath = path.join(__dirname, '..', '.bin/babel');
-        console.log('Babel Executable: ' + execPath);
         if (isWin) execPath += '.cmd';
         const result = spawnSync(execPath, args, options);
         if (result.error) {
@@ -65,14 +69,14 @@ class ServerlessPlugin {
         const stdout = settings && settings.stdout && result && result.stdout && result.stdout.toString();
         const sterr = result && result.stderr && result.stderr.toString();
         if (stdout) {
-          this.serverless.cli.log(`Babel compilation:\n${stdout}`);
+          this.log(`Babel output:\n${stdout}`);
         }
         if (sterr) {
           return reject(sterr);
         }
 
         // zip
-        this.serverless.cli.log('Packaging service with compiled files...');
+        this.log('Packaging service from Babel output...');
         const patterns = ['**'];
         const tmpBabelDirectory = '.serverless/tmpBabelDirectory';
         const zip = archiver.create('zip');
