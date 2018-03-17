@@ -26,15 +26,6 @@ class ServerlessPlugin {
 
   transform() {
     return new BbPromise((resolve, reject) => {
-      if (!this.serverless.service.custom ||
-          _.isUndefined(this.serverless.service.custom.babelPresets)) {
-        reject('For the serverless-babel-plugin you need to define `babelPresets` as custom configuration in your serverless.yaml');
-      }
-
-      if (!Array.isArray(this.serverless.service.custom.babelPresets)) {
-        reject('`babelPresets` in your serverless.yaml must be an Array');
-      }
-
       const servicePath = this.serverless.config.servicePath;
 
       let bundleName = this.serverless.service.service;
@@ -60,12 +51,6 @@ class ServerlessPlugin {
           'tmpBabelDirectory',
           '--ignore=node_modules'
         ];
-        if(this.serverless.service.custom.babelPresets) {
-          args.push(`--presets=${this.serverless.service.custom.babelPresets.join(',')}`)
-        }
-        if(this.serverless.service.custom.babelPlugins) {
-          args.push(`--plugins=${this.serverless.service.custom.babelPlugins.join(',')}`)
-        }
         const options = {
           cwd: path.join(servicePath, '.serverless'),
         };
@@ -76,7 +61,8 @@ class ServerlessPlugin {
         if (result.error) {
           return reject(result.error);
         }
-        const stdout = result && result.stdout && result.stdout.toString();
+        const settings = this.serverless.service.custom.serverlessBabel;
+        const stdout = settings && settings.stdout && result && result.stdout && result.stdout.toString();
         const sterr = result && result.stderr && result.stderr.toString();
         if (stdout) {
           this.serverless.cli.log(`Babel compilation:\n${stdout}`);
