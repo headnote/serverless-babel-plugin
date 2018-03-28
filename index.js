@@ -78,7 +78,7 @@ class ServerlessPlugin {
         const tmpBabelDirectory = '.serverless/tmpBabelDirectory';
 
         // Fix permissions
-        if (settings.permissions && settings.permissions.length) {
+        if (settings && settings.permissions && settings.permissions.length) {
           settings.permissions.forEach((file) => {
             this.log('chmod: ' + file.path + ' set to ' + file.mode);
             fs.chmodSync(path.join(servicePath, tmpBabelDirectory, file.path), file.mode);
