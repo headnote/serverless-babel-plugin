@@ -75,10 +75,19 @@ class ServerlessPlugin {
           return reject(sterr);
         }
 
+        const tmpBabelDirectory = '.serverless/tmpBabelDirectory';
+
+        // Fix permissions
+        if (settings.permissions && settings.permissions.length) {
+          settings.permissions.forEach((file) => {
+            this.log('chmod: ' + file.path + ' set to ' + file.mode);
+            fs.chmodSync(path.join(servicePath, tmpBabelDirectory, file.path), file.mode);
+          })
+        }
+
         // zip
         this.log('Packaging service from Babel output...');
         const patterns = ['**'];
-        const tmpBabelDirectory = '.serverless/tmpBabelDirectory';
         const zip = archiver.create('zip');
 
         const artifactFilePath = `.serverless/${bundleName}.zip`;
