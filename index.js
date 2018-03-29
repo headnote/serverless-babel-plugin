@@ -1,12 +1,10 @@
 'use strict';
 
-const unzip = require('unzip2');
+const exec = require('node-exec-promise').exec;
 const fs = require('fs');
 const path = require('path');
-const archiver = require('archiver');
 const spawnSync = require('child_process').spawnSync;
 const BbPromise = require('bluebird');
-const glob = require('glob-all');
 const rimraf = require('rimraf');
 const _ = require('lodash');
 const isWin = /^win/.test(process.platform);
@@ -19,8 +17,8 @@ class ServerlessPlugin {
     this.options = options;
 
     this.hooks = {
-      'after:deploy:createDeploymentArtifacts': this.transform.bind(this),
-      'after:deploy:function:packageFunction': this.transform.bind(this),
+      'after:package:createDeploymentArtifacts': this.transform.bind(this),
+      'after:package:function:packageFunction': this.transform.bind(this),
     };
   }
 
@@ -40,20 +38,16 @@ class ServerlessPlugin {
         bundleName = `${bundleName}-${this.options.stage}-${this.options.f}`;
       }
 
-      // unzip
-      const stream = fs.createReadStream(path.join(servicePath, `.serverless/${bundleName}.zip`))
-        .pipe(unzip.Extract({ path: path.join(servicePath, '.serverless/tmpBabelDirectory') }));
+      const tmpFolder = 'tmpBabelDirectory'
+      const tmpBabelDirectory = `.serverless/${tmpFolder}`;
+      const bundleFilePath = path.join(servicePath, `.serverless/${bundleName}.zip`);
 
-      stream.on('error', (error) => {
-        reject(error);
-      });
-
-      // unzip2 actually emits close when completed. When unzipping a large file, using finish will cause this plugin to run prematurely
-      stream.on('close', () => {
+      // Called once files are unzipped and ready to process
+      let processFiles = () => {
         // compile
         const args = [
-          '--out-dir=tmpBabelDirectory',
-          'tmpBabelDirectory',
+          `--out-dir=${tmpFolder}`,
+          `${tmpFolder}`,
           '--ignore=node_modules'
         ];
         const options = {
@@ -75,10 +69,8 @@ class ServerlessPlugin {
           return reject(sterr);
         }
 
-        const tmpBabelDirectory = '.serverless/tmpBabelDirectory';
-
         // Fix permissions
-        if (settings.permissions && settings.permissions.length) {
+        if (settings && settings.permissions && settings.permissions.length) {
           settings.permissions.forEach((file) => {
             this.log('chmod: ' + file.path + ' set to ' + file.mode);
             fs.chmodSync(path.join(servicePath, tmpBabelDirectory, file.path), file.mode);
@@ -87,50 +79,26 @@ class ServerlessPlugin {
 
         // zip
         this.log('Packaging service from Babel output...');
-        const patterns = ['**'];
-        const zip = archiver.create('zip');
 
-        const artifactFilePath = `.serverless/${bundleName}.zip`;
-        this.serverless.utils.writeFileDir(artifactFilePath);
-
-        const output = fs.createWriteStream(artifactFilePath);
-
-        output.on('open', () => {
-          zip.pipe(output);
-
-          const files = glob.sync(patterns, {
-            cwd: tmpBabelDirectory,
-            dot: true,
-            silent: true,
-            follow: true,
-          });
-
-          files.forEach((filePath) => {
-            const fullPath = path.resolve(tmpBabelDirectory, filePath);
-
-            const stats = fs.statSync(fullPath);
-
-            if (!stats.isDirectory(fullPath)) {
-              zip.append(fs.readFileSync(fullPath), {
-                name: filePath,
-                mode: stats.mode,
-              });
-            }
-          });
-
-          zip.finalize();
-        });
-
-        zip.on('error', err => reject(err));
-
-        output.on('close', () => {
+        exec(`cd ${tmpBabelDirectory} && zip -qqFSr ../${bundleName}.zip . * && cd ../../`).then(() => {
           try {
             rimraf.sync(tmpBabelDirectory, { disableGlob: true });
           } catch (err) {
             reject(err);
           }
-          resolve(artifactFilePath);
-        });
+          resolve(bundleFilePath);
+        }).catch((err) => {
+          this.log(err)
+          reject(err);
+        })
+      };
+
+      // Unzip the serverless bundle
+      exec(`unzip -qq ${path.join(servicePath, `.serverless/${bundleName}.zip`)} -d ${path.join(servicePath, '.serverless/tmpBabelDirectory')}`).then(() => {
+        processFiles();
+      }).catch((err) => {
+        this.log(err)
+        reject(err);
       });
     });
   }
